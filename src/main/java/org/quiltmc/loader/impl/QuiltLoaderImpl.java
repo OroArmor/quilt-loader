@@ -190,7 +190,7 @@ public class QuiltLoaderImpl implements FabricLoader {
 
 		Set<Throwable> exceptions = setup();
 		if (!exceptions.isEmpty())
-			QuiltGuiEntry.displayCriticalErrors(exception, true);
+			QuiltGuiEntry.displayCriticalErrors(exceptions, true);
 
 	}
 

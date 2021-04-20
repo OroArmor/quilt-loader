@@ -40,7 +40,7 @@ public final class QuiltGuiEntry {
 
 	/** @param exitAfter If true then this will call {@link System#exit(int)} after showing the gui, otherwise this will
 	 *            return normally. */
-	public static void displayCriticalError(Set<Throwable> exceptions, boolean exitAfter) {
+	public static void displayCriticalErrors(Set<Throwable> exceptions, boolean exitAfter) {
 		for (Throwable t : exceptions) {
 			QuiltLoaderImpl.INSTANCE.getLogger().fatal("A critical error occurred", t);
 		}
