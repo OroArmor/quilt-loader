@@ -28,7 +28,7 @@ import org.quiltmc.loader.impl.gui.QuiltStatusTree.QuiltStatusTab;
 /** The main entry point for all quilt-based stuff. */
 public final class QuiltGuiEntry {
 	/** Opens the given {@link QuiltStatusTree} in a new swing window.
-	 * 
+	 *
 	 * @throws Exception if something went wrong while opening the window. */
 	public static void open(QuiltStatusTree tree) throws Exception {
 		openWindow(tree, true);
@@ -40,8 +40,11 @@ public final class QuiltGuiEntry {
 
 	/** @param exitAfter If true then this will call {@link System#exit(int)} after showing the gui, otherwise this will
 	 *            return normally. */
-	public static void displayCriticalError(Throwable exception, boolean exitAfter) {
-		QuiltLoaderImpl.INSTANCE.getLogger().fatal("A critical error occurred", exception);
+	public static void displayCriticalError(Set<Throwable> exceptions, boolean exitAfter) {
+		for (Throwable t : exceptions) {
+			QuiltLoaderImpl.INSTANCE.getLogger().fatal("A critical error occurred", t);
+		}
+
 
 		GameProvider provider = QuiltLoaderImpl.INSTANCE.getGameProvider();
 
@@ -50,7 +53,9 @@ public final class QuiltGuiEntry {
 			QuiltStatusTab crashTab = tree.addTab("Crash");
 
 			tree.mainText = "Failed to launch!";
-			addThrowable(crashTab.node, exception, new HashSet<>());
+			for (Throwable t : exceptions) {
+				addThrowable(crashTab.node, t, new HashSet<>());
+			}
 
 			// Maybe add an "open mods folder" button?
 			// or should that be part of the main tree's right-click menu?

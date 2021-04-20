@@ -22,13 +22,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -40,7 +34,10 @@ import org.quiltmc.loader.impl.discovery.RuntimeModRemapper;
 import org.quiltmc.loader.impl.metadata.DependencyOverrides;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.objectweb.asm.Opcodes;
 
+import net.fabricmc.accesswidener.AccessWidener;
+import net.fabricmc.accesswidener.AccessWidenerReader;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.LanguageAdapter;
 import net.fabricmc.loader.api.MappingResolver;
@@ -58,10 +55,6 @@ import org.quiltmc.loader.impl.metadata.EntrypointMetadata;
 import org.quiltmc.loader.impl.metadata.LoaderModMetadata;
 import org.quiltmc.loader.impl.util.DefaultLanguageAdapter;
 import org.quiltmc.loader.impl.util.SystemProperties;
-import net.fabricmc.accesswidener.AccessWidener;
-import net.fabricmc.accesswidener.AccessWidenerReader;
-
-import org.objectweb.asm.Opcodes;
 
 /**
  * The main class for mod loading operations.
@@ -195,18 +188,20 @@ public class QuiltLoaderImpl implements FabricLoader {
 		if (provider == null) throw new IllegalStateException("game provider not set");
 		if (frozen) throw new IllegalStateException("Frozen - cannot load additional mods!");
 
-		try {
-			setup();
-		} catch (ModResolutionException exception) {
-			QuiltGuiEntry.displayCriticalError(exception, true);
-		}
+		Set<Throwable> exceptions = setup();
+		if (!exceptions.isEmpty())
+			QuiltGuiEntry.displayCriticalErrors(exception, true);
+
 	}
 
-	private void setup() throws ModResolutionException {
+	private Set<Throwable> setup() {
+		Set<Throwable> exceptions = new HashSet<>();
+
 		ModResolver resolver = new ModResolver();
 		resolver.addCandidateFinder(new ClasspathModCandidateFinder());
 		resolver.addCandidateFinder(new DirectoryModCandidateFinder(getModsDir(), isDevelopmentEnvironment()));
-		Map<String, ModCandidate> candidateMap = resolver.resolve(this);
+		Map<String, ModCandidate> candidateMap;
+		candidateMap = resolver.resolve(this, exceptions);
 
 		String modText;
 		switch (candidateMap.values().size()) {
@@ -222,8 +217,8 @@ public class QuiltLoaderImpl implements FabricLoader {
 		}
 
 		LOGGER.info("[" + getClass().getSimpleName() + "] " + modText, candidateMap.values().size(), candidateMap.values().stream()
-			.map(info -> String.format("%s@%s", info.getInfo().getId(), info.getInfo().getVersion().getFriendlyString()))
-			.collect(Collectors.joining(", ")));
+				.map(info -> String.format("%s@%s", info.getInfo().getId(), info.getInfo().getVersion().getFriendlyString()))
+				.collect(Collectors.joining(", ")));
 
 		if (DependencyOverrides.INSTANCE.getDependencyOverrides().size() > 0) {
 			LOGGER.info(String.format("Dependencies overridden for \"%s\"", String.join(", ", DependencyOverrides.INSTANCE.getDependencyOverrides().keySet())));
@@ -238,13 +233,23 @@ public class QuiltLoaderImpl implements FabricLoader {
 
 		if (runtimeModRemapping) {
 			for (ModCandidate candidate : RuntimeModRemapper.remap(candidateMap.values(), ModResolver.getInMemoryFs())) {
-				addMod(candidate);
+				try {
+					addMod(candidate);
+				} catch (ModResolutionException e) {
+					exceptions.add(e);
+				}
 			}
 		} else {
 			for (ModCandidate candidate : candidateMap.values()) {
-				addMod(candidate);
+				try {
+					addMod(candidate);
+				} catch (ModResolutionException e) {
+					exceptions.add(e);
+				}
 			}
 		}
+
+		return exceptions;
 	}
 
 	protected void finishModLoading() {
@@ -337,7 +342,7 @@ public class QuiltLoaderImpl implements FabricLoader {
 		mods.add(container);
 		modMap.put(info.getId(), container);
 		for (String provides : info.getProvides()) {
-			if(modMap.containsKey(provides)) {
+			if (modMap.containsKey(provides)) {
 				throw new ModResolutionException("Duplicate provided alias: " + provides + "! (" + modMap.get(info.getId()).getOriginUrl().getFile() + ", " + originUrl.getFile() + ")");
 			}
 			modMap.put(provides, container);
